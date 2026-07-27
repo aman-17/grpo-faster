@@ -35,7 +35,7 @@ Open `grpo.py` and implement `train_async` to improve throughput while respectin
 
 # How to Run
 
-No dependencies needed for local runs (Python 3.12+). Modal is only needed for cloud benchmarks.
+No dependencies needed for local runs (Python 3.12+).
 
 ## Run a single recipe
 
