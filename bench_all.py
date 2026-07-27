@@ -48,6 +48,7 @@ import ctypes
 import random
 import statistics
 import sys
+import time
 
 from grpo import (
     GPU,
@@ -114,11 +115,17 @@ async def one_pass(cfg: Config) -> dict[str, float | None]:
 
     results: dict[str, float | None] = {}
     for name, fn, mod in RECIPES:
+        cpu0 = time.process_time()
         real_s = await run_and_report(name, fn, rollouts, gpus, optimizer, cfg)
+        cpu = time.process_time() - cpu0
         if mod is not None:
             line = mod.METRICS.line()
             if line:
                 print(f"  Metrics    : {line}")
+        if real_s is not None:
+            frac = cpu / (real_s / cfg.time_scale)
+            flag = "   <-- CONTAMINATED, lower --time-scale" if frac > 0.10 else ""
+            print(f"  CPU busy   : {100 * frac:.1f}% of wall{flag}")
         results[name] = real_s
     return results
 
