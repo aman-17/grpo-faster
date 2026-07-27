@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS archive artifacts
+__MACOSX/
+.DS_Store
+._*
+
+# Local Claude Code settings
+.claude/
