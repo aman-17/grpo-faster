@@ -5,38 +5,6 @@ Usage:
     python bench_all.py --seed 7           # different latency draw
     python bench_all.py --repeat 3         # median of 3 draws
     python bench_all.py --time-scale 100000 --no-timer-fix    # reproduce the trap
-
-
-READ THIS BEFORE TRUSTING ANY NUMBER FROM THIS SIMULATOR
-========================================================
-The simulator measures wall-clock and multiplies by `time_scale`. At the stock
-`time_scale=100_000`, a 233ms simulated latency becomes a **2.33ms**
-`asyncio.sleep`, and on Windows the default timer resolution is ~15.6ms. Measured
-on this machine with a ProactorEventLoop:
-
-    requested   0.60ms  ->  actual   6.19ms   (x10.3)
-    requested   2.33ms  ->  actual   6.72ms   (x2.9)
-    requested  23.30ms  ->  actual  26.22ms   (x1.13)
-
-That is a roughly *additive* ~4ms floor per sleep. It does not scale with the
-simulated latency, so it does not penalise runs uniformly -- it penalises them in
-proportion to how many sleeps sit on the critical path. Which is precisely the
-axis every pipelined design moves along: the baseline serialises 100 long sleeps
-(50 inference waves + 50 backward phases), while a streaming pipeline serialises
-~100 *short* ones per slot. Benchmarked naively, the stock config reports the
-pipelined recipes as 0.7-0.9x, i.e. slower than the baseline, entirely as an
-artifact.
-
-Two corrections, both applied by default:
-
-  1. `timeBeginPeriod(1)` (winmm) drops the system timer to 1ms.
-  2. `time_scale=10_000` puts the median sleep at ~23ms, where the residual
-     error is ~5% and, more importantly, is proportional rather than additive.
-
-`run_and_report` normalises by `time_scale`, so the reported "Real time" stays
-directly comparable across scales -- only the fidelity changes. Any conclusion
-that flips between --time-scale 10000 and 100000 is a measurement artifact, not
-a result. Cross-check with --repeat.
 """
 
 from __future__ import annotations

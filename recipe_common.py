@@ -18,10 +18,6 @@ from statistics import fmean, median
 
 from grpo import GPU, Config, GradientOptimizer, Rollout
 
-# ---------------------------------------------------------------------------
-# Batch assembly
-# ---------------------------------------------------------------------------
-
 
 class BatchRecorder:
     """Collects BACKWARDED rollouts and fires `optimizer_step` every batch_size.
@@ -67,11 +63,6 @@ class BatchRecorder:
                 await self._opt.optimizer_step(self._pending, final_input=True)
                 self._pending = []
                 self.steps += 1
-
-
-# ---------------------------------------------------------------------------
-# Edge-triggered broadcast
-# ---------------------------------------------------------------------------
 
 
 class Gate:
@@ -139,11 +130,6 @@ class Signal:
         await self._evt.wait()
 
 
-# ---------------------------------------------------------------------------
-# Capacity model / role split planning
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class CapacityModel:
     """Steady-state throughput of one GPU in each role, in rollouts/second.
@@ -198,11 +184,6 @@ class CapacityModel:
         )
 
 
-# ---------------------------------------------------------------------------
-# Backward helpers
-# ---------------------------------------------------------------------------
-
-
 async def run_backward_and_record(
     gpu: GPU,
     chunk: list[Rollout],
@@ -220,11 +201,6 @@ async def run_backward_and_record(
 
 def chunked(items: list[Rollout], size: int) -> list[list[Rollout]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
-
-
-# ---------------------------------------------------------------------------
-# Instrumentation
-# ---------------------------------------------------------------------------
 
 
 @dataclass

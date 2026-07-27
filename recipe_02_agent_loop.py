@@ -66,10 +66,6 @@ from dataclasses import dataclass
 from grpo import GPU, GradientOptimizer, Rollout
 from recipe_common import Metrics, Signal, chunked
 
-# ---------------------------------------------------------------------------
-# Tunables
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class AgentLoopConfig:
@@ -82,11 +78,6 @@ class AgentLoopConfig:
     """Simulated vLLM sleep()/wake_up() cost per role flip. The assignment's cost
     model has no such term; non-zero values show how quickly tail overlap stops
     paying for itself."""
-
-
-# ---------------------------------------------------------------------------
-# AsyncLLMServerManager
-# ---------------------------------------------------------------------------
 
 
 class AsyncLLMServerManager:
@@ -106,8 +97,6 @@ class AsyncLLMServerManager:
         self._free = Signal()
         self.routed = [0] * len(gpus)
 
-    # -- lifecycle (AgentLoopManager.wake_up / sleep) -----------------------
-
     def sleep(self, gpu_id: int) -> None:
         """Stop routing to this replica; it is about to take the trainer's role."""
         self._awake[gpu_id] = False
@@ -118,8 +107,6 @@ class AsyncLLMServerManager:
 
     def load(self, gpu_id: int) -> int:
         return self._load[gpu_id]
-
-    # -- routing ------------------------------------------------------------
 
     def _pick(self) -> int | None:
         best, best_load = None, self._slots
@@ -145,12 +132,6 @@ class AsyncLLMServerManager:
             self._load[i] -= 1
             self._free.notify()
 
-
-# ---------------------------------------------------------------------------
-# One batch: generate (async) -> backward -> optimizer step
-# ---------------------------------------------------------------------------
-
-
 class _BatchRun:
     """Tracks one batch through generation and backward.
 
@@ -174,10 +155,6 @@ class _BatchRun:
     """
 
     def __init__(self, batch: list[Rollout], slots: int, metrics: Metrics) -> None:
-        # "queued" counts rollouts not yet admitted to a GPU. Decremented at
-        # admission, not at task creation -- with an oversubscribed batch most
-        # rollouts sit in the router's wait loop for a long time, and putting a
-        # GPU to sleep while work is still queued would starve generation.
         self.queued = len(batch)
         self.backwarded = 0
         self.total = len(batch)
@@ -233,7 +210,6 @@ async def _backward_worker(
     set and deadlock. Serialising per GPU is not an optimisation, it is a
     correctness requirement.
     """
-    # Do not steal capacity from generation until there is nothing left to admit.
     while not run.all_dispatched:
         await run.changed.wait()
 
@@ -259,7 +235,6 @@ async def _backward_worker(
         if cfg.engine_switch_ms:
             await asyncio.sleep(gpu.cfg.sim(cfg.engine_switch_ms))
     finally:
-        # Must always re-arm the replica; a GPU left asleep stalls the next batch.
         mgr.wake_up(gpu.id)
 
 
@@ -295,10 +270,6 @@ async def _run_batch(
         run.backwarded = run.total
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
 METRICS = Metrics(name="train_agent_loop")
 CONFIG = AgentLoopConfig()
 
@@ -327,9 +298,6 @@ async def train_agent_loop(
     METRICS.extra["routed"] = "/".join(str(n) for n in mgr.routed)
 
 
-# ---------------------------------------------------------------------------
-
-
 if __name__ == "__main__":
     from grpo import Config, ModelState, make_rollouts, run_and_report, train_baseline
 
@@ -351,9 +319,7 @@ if __name__ == "__main__":
                 print(f"  Speedup    : {base / got:.2f}x")
 
     async def main() -> None:
-        # Slots exactly saturated by one batch -- routing has no freedom.
         await sweep(Config(), "saturated: batch == total slots")
-        # Batch oversubscribes the slots -- continuous batching and routing bite.
         await sweep(Config(batch_size=1024, num_batches=12), "oversubscribed: batch == 4x total slots")
 
     asyncio.run(main())

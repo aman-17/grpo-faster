@@ -33,10 +33,45 @@ All GPUs do the same phase at the same time. While inference runs, no backward w
 
 Open `grpo.py` and implement `train_async` to improve throughput while respecting all constraints. Read the TODO docstring above `train_async` and the support class docstrings carefully — they describe the constraints, key concepts, and hints.
 
-## Running
+# How to Run
+
+No dependencies needed for local runs (Python 3.12+). Modal is only needed for cloud benchmarks.
+
+## Run a single recipe
+
+Each recipe is self-contained and compares itself against the baseline:
 
 ```bash
-python grpo.py
+python recipe_01_colocated_hybrid.py
+python recipe_02_agent_loop.py
+python recipe_03_one_step_off.py
+python recipe_04_fully_async.py     # best: 1.76x, also sweeps staleness thresholds
 ```
 
-The harness runs both `train_baseline` and `train_async`, validates correctness, and reports the speedup.
+## Run all recipes locally
+
+```bash
+python bench_all.py                          # seed 0, time_scale 10000
+python bench_all.py --seed 1 --repeat 3      # median of 3 repeats
+python bench_all.py --time-scale 2000        # slower but higher fidelity
+```
+
+Trust the run only if the header says timer fidelity is below ~1.05x and no
+recipe prints `CONTAMINATED` next to its CPU-busy line. If either appears,
+lower `--time-scale` (each run gets proportionally slower but more accurate).
+
+## Results
+
+Verified at `--time-scale 2000` (timer inflation 1.01x, seed spread < 0.2%):
+
+| Recipe              | Speedup vs baseline | Notes                                    |
+| ------------------- | ------------------- | ---------------------------------------- |
+| 01 colocated_hybrid | 1.17x               | fails validation on seed 2 (44/50 updates) |
+| 02 agent_loop       | 1.01x               |                                          |
+| 03 one_step_off     | 0.98x               |                                          |
+| 04 fully_async      | **1.76x**           | best; ~0.15% off the provable ceiling    |
+
+A run is valid only if all 12,800 rollouts are recorded and the model reaches
+at least 45/50 weight updates; failures print the validation error instead of
+a time.
+

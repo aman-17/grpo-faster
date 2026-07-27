@@ -84,10 +84,6 @@ from dataclasses import dataclass
 from grpo import GPU, GradientOptimizer, Rollout
 from recipe_common import BatchRecorder, Metrics, Signal
 
-# ---------------------------------------------------------------------------
-# Tunables
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class HybridEngineConfig:
@@ -109,10 +105,6 @@ class HybridEngineConfig:
     switch. Zero by default because the assignment's cost model has no such term;
     raise it to see why verl eventually disaggregated (see __main__)."""
 
-
-# ---------------------------------------------------------------------------
-# Shared cluster state
-# ---------------------------------------------------------------------------
 
 
 class _Cluster:
@@ -139,15 +131,10 @@ class _Cluster:
         self.backwarded = 0
         self.recorder = recorder
         self.cfg = cfg
-        # A flush can never require more queued rollouts than the queue is
-        # allowed to hold, or admission backpressure and the flush trigger
-        # deadlock against each other.
         self.max_ready = max(max_ready, slots)
         self.flush_watermark = min(cfg.chunks_per_flush * slots, self.max_ready)
         self.metrics = metrics
         self.changed = Signal()
-
-    # -- predicates ---------------------------------------------------------
 
     @property
     def done(self) -> bool:
@@ -164,10 +151,7 @@ class _Cluster:
     def should_flush(self) -> bool:
         if len(self.ready) >= self.flush_watermark:
             return True
-        # Tail: production has stopped, so waiting for a full flush deadlocks.
         return self.tail and bool(self.ready)
-
-    # -- mutations ----------------------------------------------------------
 
     def take(self) -> Rollout | None:
         if not self.can_admit():
@@ -202,11 +186,6 @@ class _Cluster:
         self.changed.notify()
 
 
-# ---------------------------------------------------------------------------
-# Per-GPU scheduler
-# ---------------------------------------------------------------------------
-
-
 async def _infer_one(gpu: GPU, rollout: Rollout, cl: _Cluster) -> None:
     await gpu.run_inference(rollout)
     cl.retire(rollout)
@@ -220,7 +199,6 @@ async def _gpu_scheduler(gpu: GPU, cl: _Cluster) -> None:
         if cl.done and not inflight:
             return
 
-        # ---- role decision ------------------------------------------------
         if not draining and cl.should_flush():
             draining = True
             cl.metrics.role_switches += 1
@@ -241,10 +219,8 @@ async def _gpu_scheduler(gpu: GPU, cl: _Cluster) -> None:
                 if cl.cfg.switch_cost_ms:
                     await asyncio.sleep(gpu.cfg.sim(cl.cfg.switch_cost_ms))
                 continue
-            # Nothing claimable after all (another GPU beat us to it) -> fall
-            # through and go back to admitting inference.
 
-        # ---- admission ----------------------------------------------------
+
         if not draining:
             while len(inflight) < gpu.slots_per_gpu:
                 rollout = cl.take()
@@ -252,7 +228,6 @@ async def _gpu_scheduler(gpu: GPU, cl: _Cluster) -> None:
                     break
                 inflight.add(asyncio.create_task(_infer_one(gpu, rollout, cl)))
 
-        # ---- block until something changes --------------------------------
         if inflight:
             done, inflight = await asyncio.wait(inflight, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
@@ -262,10 +237,6 @@ async def _gpu_scheduler(gpu: GPU, cl: _Cluster) -> None:
                 return
             await cl.changed.wait()
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 METRICS = Metrics(name="train_colocated_hybrid")
 CONFIG = HybridEngineConfig()
@@ -290,9 +261,6 @@ async def train_colocated_hybrid(
     cl = _Cluster(rollouts, slots_per_gpu, recorder, CONFIG, max_ready, METRICS)
     await asyncio.gather(*[_gpu_scheduler(gpu, cl) for gpu in gpus])
     await recorder.close()
-
-
-# ---------------------------------------------------------------------------
 
 
 if __name__ == "__main__":

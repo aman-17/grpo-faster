@@ -74,10 +74,6 @@ from dataclasses import dataclass
 from grpo import GPU, GradientOptimizer, Rollout
 from recipe_common import CapacityModel, Gate, Metrics, Signal, chunked
 
-# ---------------------------------------------------------------------------
-# Tunables
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class OneStepOffConfig:
@@ -107,11 +103,6 @@ class OneStepOffConfig:
     """Simulated NCCL weight broadcast after each optimizer step, during which
     generation is stopped. verl measures this under 300ms in practice; the
     assignment's cost model has no such term, so it defaults to 0."""
-
-
-# ---------------------------------------------------------------------------
-# Rollouter  (the generation group)
-# ---------------------------------------------------------------------------
 
 
 class Rollouter:
@@ -160,8 +151,6 @@ class Rollouter:
         self._tasks: list[asyncio.Task] = []
         self._closed = False
 
-    # -- admission control --------------------------------------------------
-
     def open_batch(self, b: int, guard: int) -> None:
         """Make batch `b` issuable, holding back its last `guard` rollouts.
 
@@ -190,8 +179,6 @@ class Rollouter:
         if n:
             self._work.wake(n)
 
-    # -- control ------------------------------------------------------------
-
     def start(self) -> None:
         for gpu in self._gpus:
             for _ in range(self._slots):
@@ -218,8 +205,6 @@ class Rollouter:
     async def join(self) -> None:
         await asyncio.gather(*self._tasks)
 
-    # -- worker -------------------------------------------------------------
-
     async def _slot_worker(self, gpu: GPU) -> None:
         while True:
             while self.paused or not self._issue:
@@ -235,10 +220,6 @@ class Rollouter:
             if self._remaining[idx // self._bs] == 0:
                 self.progress.notify()
 
-
-# ---------------------------------------------------------------------------
-# Trainer  (the training group)
-# ---------------------------------------------------------------------------
 
 
 async def _backward_batch(
@@ -267,10 +248,6 @@ async def _backward_batch(
 
     await asyncio.gather(*[worker(g) for g in train_gpus])
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 METRICS = Metrics(name="train_one_step_off")
 CONFIG = OneStepOffConfig()
@@ -309,8 +286,6 @@ async def train_one_step_off(
         await rollouter.wait_batch(b)
         METRICS.wait_prev_gen_s += time.perf_counter() - t0
 
-        # Open generation for the next step *before* training this one -- this
-        # single reordering is the whole recipe.
         for k in range(b + 1, b + 2 + CONFIG.spill_batches):
             rollouter.open_batch(k, guard=CONFIG.freshness_guard)
 
@@ -330,8 +305,6 @@ async def train_one_step_off(
     await rollouter.join()
 
 
-# ---------------------------------------------------------------------------
-
 
 if __name__ == "__main__":
     from grpo import Config, ModelState, make_rollouts, run_and_report, train_baseline
@@ -348,8 +321,6 @@ if __name__ == "__main__":
 
         base = await run_and_report("train_baseline", train_baseline, rollouts, gpus, optimizer, cfg)
 
-        # Sweep every legal split -- the point is that the wrong one loses to the
-        # baseline outright, which is exactly verl's "balance the two groups" rule.
         for n_gen in (1, 2, 3):
             CONFIG.gen_gpus = n_gen
             got = await run_and_report(

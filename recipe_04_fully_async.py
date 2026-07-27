@@ -97,11 +97,6 @@ from dataclasses import dataclass
 from grpo import GPU, GradientOptimizer, Rollout
 from recipe_common import BatchRecorder, CapacityModel, Gate, Metrics, Signal
 
-# ---------------------------------------------------------------------------
-# Tunables
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class FullyAsyncConfig:
     gen_gpus: int | None = None
@@ -116,11 +111,6 @@ class FullyAsyncConfig:
 
     param_sync_ms: float = 0.0
     """Simulated NCCL broadcast cost, during which the Rollouter is stopped."""
-
-
-# ---------------------------------------------------------------------------
-# MessageQueue
-# ---------------------------------------------------------------------------
 
 
 class MessageQueue:
@@ -168,11 +158,6 @@ class MessageQueue:
             await self._not_empty.wait()
 
 
-# ---------------------------------------------------------------------------
-# ParameterSynchronizer
-# ---------------------------------------------------------------------------
-
-
 class ParameterSynchronizer:
     """NCCL broadcast trainer -> rollouter, every `trigger_parameter_sync_step`."""
 
@@ -192,11 +177,6 @@ class ParameterSynchronizer:
         await asyncio.sleep(self._sim(self._cfg.param_sync_ms))
         self._rollouter.paused = False
         self._rollouter.changed.notify()
-
-
-# ---------------------------------------------------------------------------
-# Rollouter
-# ---------------------------------------------------------------------------
 
 
 class Rollouter:
@@ -236,11 +216,6 @@ class Rollouter:
             await self._queue.put(rollout)
 
 
-# ---------------------------------------------------------------------------
-# Trainer
-# ---------------------------------------------------------------------------
-
-
 async def _trainer_worker(
     gpu: GPU,
     queue: MessageQueue,
@@ -257,11 +232,6 @@ async def _trainer_worker(
         await gpu.run_backward(chunk)
         metrics.backward_calls += 1
         await recorder.record(chunk)
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 METRICS = Metrics(name="train_fully_async")
 CONFIG = FullyAsyncConfig()
@@ -299,9 +269,6 @@ async def train_fully_async(
     )
     await recorder.close()
     METRICS.stale_batches = recorder.stale_steps
-
-
-# ---------------------------------------------------------------------------
 
 
 if __name__ == "__main__":
