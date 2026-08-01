@@ -31,42 +31,6 @@ class Config:
         return self.inference_latency_lo + t * (self.inference_latency_hi - self.inference_latency_lo)
 
 
-# ===========================================================================
-# TRAINING FUNCTIONS - IMPLEMENT YOUR SOLUTION HERE
-# ===========================================================================
-
-
-"""TODO: Implement an async training pipeline that improves throughput.
-
-Problem:
-    Analyze train_baseline to identify inefficiencies that limit GPU utilization.
-    Then implement train_async to improve throughput while respecting all constraints.
-
-Key Concepts:
-    1. GPU Operations:
-       - Inference: GPUs can stream multiple inference requests concurrently (up to slots_per_gpu)
-       - Backward: GPUs process backward passes in batches (up to slots_per_gpu rollouts at once)
-       - A GPU can ONLY do inference OR backward at one time, never both simultaneously
-
-    2. Weights Version (Optimizer Steps):
-       - Each time optimizer_step is called, the model weights improve (version increments)
-       - Rollouts capture which weights version they used during inference
-       - For good training dynamics, the model should improve continuously throughout training,
-         not just at the end (i.e., weights version should increase steadily, not all at once)
-
-Constraints:
-    - Each rollout must complete inference before its backward pass
-    - Rollouts of size `batch_size` must be recorded together via optimizer_step
-    - All rollouts must be processed and recorded exactly once
-    - A GPU can only do inference OR backward at a single time (see GPU class docstring)
-    - The model should be updated continuously: final weights version should be close to num_batches
-      (within 10% tolerance) to ensure the model improves throughout training
-
-Hint:
-    Rollouts can be processed out of order, as long as batches are recorded correctly.
-"""
-
-
 async def train_async(
     rollouts: list["Rollout"],
     gpus: list["GPU"],
@@ -119,16 +83,6 @@ async def run_backward_chunks(gpu: "GPU", chunks: list[list["Rollout"]]) -> None
         await gpu.run_backward(chunk)
 
 
-# ===========================================================================
-# SUPPORT CLASSES AND FUNCTIONS (DO NOT MODIFY)
-# ===========================================================================
-
-
-# ---------------------------------------------------------------------------
-# Rollout
-# ---------------------------------------------------------------------------
-
-
 class RolloutState(Enum):
     CREATED = auto()
     INFERENCED = auto()
@@ -167,12 +121,6 @@ def backward_latency_for(rollouts: list["Rollout"], cfg: Config) -> float:
         return 0.0
     return median(r.inference_latency for r in rollouts) * cfg.backward_forward_ratio
 
-
-# ---------------------------------------------------------------------------
-# Model state tracking
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class ModelState:
     """Shared state tracking weights version (optimizer step count) across GPUs and optimizer.
@@ -207,11 +155,6 @@ class ModelState:
     def reset(self) -> None:
         """Reset weights version counter to 0."""
         self._weights_version = 0
-
-
-# ---------------------------------------------------------------------------
-# Gradient optimizer
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -249,10 +192,6 @@ class GradientOptimizer:
         all_backwarded = all(r.state == RolloutState.BACKWARDED for r in self.rollouts)
         return f"recorded={seen}/{num_rollouts}  all_backwarded={all_backwarded}"
 
-
-# ---------------------------------------------------------------------------
-# GPU
-# ---------------------------------------------------------------------------
 
 
 @dataclass
