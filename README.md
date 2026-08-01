@@ -4,8 +4,6 @@
 
 Group Relative Policy Optimization (GRPO) is a reinforcement learning algorithm used to fine-tune LLMs.
 
-In this assignment, you're given a simulated GRPO training loop with a working but unoptimized baseline implementation. Your goal is to implement a more efficient async pipeline that improves throughput.
-
 ## Rollouts
 
 Each rollout is a single unit of work that flows through three stages:
@@ -29,9 +27,6 @@ Each GPU has a fixed number of slots (e.g. 64) and can do **either** inference o
 
 All GPUs do the same phase at the same time. While inference runs, no backward work happens and vice versa.
 
-## What to Implement
-
-Open `grpo.py` and implement `train_async` to improve throughput while respecting all constraints. Read the TODO docstring above `train_async` and the support class docstrings carefully — they describe the constraints, key concepts, and hints.
 
 # How to Run
 
